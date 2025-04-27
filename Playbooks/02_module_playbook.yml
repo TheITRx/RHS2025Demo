@@ -1,0 +1,12 @@
+---
+- name: Create a new User
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Reboot the server
+      myNamespace.HRSystem.User:
+        name: Jocel Sabellano
+        gender: Male
+        email: Jocel.s@theITRX.com
+        status: Active

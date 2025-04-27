@@ -1,0 +1,55 @@
+---
+- name: Manage server and check  service
+  hosts: windows
+  vars:
+    service_name: spooler
+  tasks:
+    - name: Reboot the server
+      ansible.windows.win_reboot:
+        msg: "Rebooting the server"
+        timeout: 300
+
+    - name: Wait for the server to come back online
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+
+    - name: Ensure the service is running and set to automatic
+      ansible.windows.win_service:
+        name: "{{ service_name }}"
+        state: started
+        start_mode: auto
+      register: service_result
+      failed_when: spooler_result.failed
+
+    - name: Send email if starting service failed
+      community.general.mail:
+        host: smtp.theitrx.local
+        port: 25
+        from: notifier@theitrx.com
+        to: jocel@theitrx.com
+        subject: "Service Check Failed"
+        body: "Failed to ensure the {{ service_name }} service is running and set to automatic on media01.theitrx.local."
+      when: service_result.failed
+
+
+    - name: Checkin to WSUS
+      ansible.windows.win_powershell:
+        script: |
+          # WIndows Server 2016 VErsion
+          [version]$ws2016Vers = '10.0.0.0'
+
+          get-service wuauserv | restart-service
+          $updateSession = new-object -com "Microsoft.Update.Session";
+          $updates=$updateSession.CreateupdateSearcher().Search("IsHidden=0 and IsInstalled=0").Updates
+
+          # if Windows Server 2016 or below
+          if([environment]::OSVersion.Version -lt $ws2016Vers){
+              wuauclt /detectnow /resetauthorization /reportnow
+
+          }
+          # Server 2016 and above
+          else{
+              wuauclt /detectnow /resetauthorization /reportnow
+              (New-Object -ComObject Microsoft.Update.AutoUpdate).DetectNow()
+              c:\windows\system32\UsoClient.exe startscan
+          }

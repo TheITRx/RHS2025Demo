@@ -1,0 +1,12 @@
+- hosts: localhost
+  connection: local
+  gather_facts: true
+  become: true
+
+  vars:
+    become_ansible_password: 
+    docker_packages_state: latest
+    docker_compose_version: v2.23.0
+
+  roles:
+    - geerlingguy.docker
