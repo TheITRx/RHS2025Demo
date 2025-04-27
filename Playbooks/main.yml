@@ -5,4 +5,5 @@
 
   tasks:
 
-    - mynamespace.hr.hr:
+    - debug:
+        msg: This is not a test, this is reality!
