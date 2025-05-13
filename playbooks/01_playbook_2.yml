@@ -1,0 +1,92 @@
+---
+- name: Execute inline PowerShell script on Windows server
+  hosts: windows
+  vars:
+    service_name: spooler
+  tasks:
+
+    - name: Reboot the system
+      ansible.windows.win_reboot:
+        reboot_timeout: 300
+
+    - name: Ensure connection is ready
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Run inline PowerShell script
+      ansible.windows.win_powershell: |
+        # Define server and email details
+
+        $serviceName = {{ service_name }}
+        $emailFrom = "notifier@theitrx.com",
+        $emailTo = "jocel@theitrx.com",
+        $smtpServer = "smtp.theitrx.local"
+
+        # Function to send email
+        function Send-Email {
+            param (
+                [string]$subject,
+                [string]$body
+            )
+            $message = New-Object system.net.mail.mailmessage
+            $message.from = $emailFrom
+            $message.To.add($emailTo)
+            $message.Subject = $subject
+            $message.Body = $body
+            $smtp = New-Object Net.Mail.SmtpClient($smtpServer)
+            $smtp.Send($message)
+        }
+
+        # Check if the service is running and ensure its startup type is automatic
+
+        $service = Get-Service -ComputerName $server -Name $serviceName
+        if ($service.StartType -ne 'Automatic') {
+            Set-Service -ComputerName $server -Name $serviceName -StartupType Automatic
+            $serviceStartup = "Automatic"
+        }
+
+        if ($service.Status -ne 'Running') {
+            Start-Service -InputObject $service
+            $service = Get-Service -ComputerName $server -Name $serviceName # Refresh service status
+            if ($service.Status -ne 'Running') {
+                Send-Email -subject "Service Start Failed" -body "Failed to start the $serviceName service on $server."
+            }
+            else {
+                $serviceStatus = "Running"
+            }
+        }
+        else {
+            $serviceStatus = "Running"
+        }
+
+        # WIndows Server 2016 VErsion
+        [version]$ws2016Vers = '10.0.0.0'
+
+        get-service wuauserv | restart-service
+        $updateSession = new-object -com "Microsoft.Update.Session";
+        $updates=$updateSession.CreateupdateSearcher().Search("IsHidden=0 and IsInstalled=0").Updates
+
+        # if Windows Server 2016 or below
+        if([environment]::OSVersion.Version -lt $ws2016Vers){
+            wuauclt /detectnow /resetauthorization /reportnow
+
+        }
+        # Server 2016 and above
+        else{
+            wuauclt /detectnow /resetauthorization /reportnow
+            (New-Object -ComObject Microsoft.Update.AutoUpdate).DetectNow()
+            c:\windows\system32\UsoClient.exe startscan
+        }
+
+        return @{
+            Server = $server
+            ServiceName = $serviceName
+            ServiceStatus = $serviceStatus
+            ServiceStartup = $serviceStartup
+        } | convertTO-json
+
+      register: script_output
+
+    - name: Display script output
+      ansible.builtin.debug:
+        var: script_output.stdout

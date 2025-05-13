@@ -1,0 +1,42 @@
+---
+- name: Test Playbook
+  hosts: all
+  connection: winrm
+  gather_facts: false
+  vars:
+    ansible_winrm_server_cert_validation: ignore
+    ansible_winrm_transport: basic
+    ansible_winrm_port: 5986
+    ansible_connection: winrm
+    service_name: spooler
+  tasks:
+    - name: Reboot the server
+      ansible.windows.win_reboot:
+        msg: "Rebooting the server"
+        reboot_timeout: 300
+
+    - name: Wait for the server to come back online
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+
+    - name: QA on the Service
+      block:
+        - name: Ensure the service is running and set to automatic
+          ansible.windows.win_service:
+            name: "{{ service_name }}"
+            state: started
+            start_mode: auto
+          register: service_result
+
+      rescue:
+        - name: Send email if starting service failed
+          community.general.mail:
+            host: smtp.theitrx.local
+            port: 25
+            from: notifier@theitrx.com
+            to: jocel@theitrx.com
+            subject: "Service Check Failed"
+            body: "Failed to ensure the {{ service_name }} service is running and set to automatic on media01.theitrx.local."
+
+    - name: Checkin to WSUS
+      mynamespace.windows.win_update_checkin:

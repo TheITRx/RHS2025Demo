@@ -1,9 +1,0 @@
-- name: Test Playbook
-  hosts: localhost
-  connection: local
-  gather_facts: false
-
-  tasks:
-
-    - debug:
-        msg: This is not a test, this is reality!
