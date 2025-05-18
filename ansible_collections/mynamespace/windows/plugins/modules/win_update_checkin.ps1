@@ -39,7 +39,7 @@ try{
     }
 
     $module.result.values = @{
-        "result_essage" = "Checkin initiated"
+        "result_message" = "Checkin initiated"
         "result_method" = $checkin_metchod
         "result_code" = 0
         
